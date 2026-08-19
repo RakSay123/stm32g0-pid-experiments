@@ -4,6 +4,11 @@
 #include <stdint.h>
 #include "stm32g070xx.h"
 
+typedef enum {
+	GPIO_OK,
+	GPIO_ERR
+} GPIO_Status_t;
+
 /**
  * @brief GPIO pin operating modes (MODER register values)
  */
@@ -79,6 +84,11 @@ typedef struct {
 	GPIO_AF_t alternate;
 } GPIO_Config_t;
 
+typedef struct {
+	GPIO_TypeDef *port;
+	uint8_t pin;
+} GPIO_Pin_t;
+
 /**
  * @brief Turns on appropriate clock signal depending on which GPIO port is intended to be used
  *
@@ -88,7 +98,7 @@ typedef struct {
  *
  * @warning Passing an invalid GPIO port results in undefined behavior
  */
-void gpio_enable_clock(GPIO_TypeDef *GPIOx);
+GPIO_Status_t gpio_enable_clock(GPIO_TypeDef *GPIOx);
 
 /**
  * @brief Configures the mode of the GPIO pin (input, output, alternate function, analog)
@@ -106,7 +116,7 @@ void gpio_enable_clock(GPIO_TypeDef *GPIOx);
  *
  * @return None
  */
-void gpio_mode_config(GPIO_TypeDef *GPIOx, uint8_t pin, GPIO_Mode_t mode);
+GPIO_Status_t gpio_mode_config(GPIO_TypeDef *GPIOx, uint8_t pin, GPIO_Mode_t mode);
 
 /**
  * @brief Configures the output type (push-pull, open drain)
@@ -120,7 +130,7 @@ void gpio_mode_config(GPIO_TypeDef *GPIOx, uint8_t pin, GPIO_Mode_t mode);
  *
  * @return None
  */
-void gpio_output_type_config(GPIO_TypeDef *GPIOx, uint8_t pin, GPIO_OType_t otype);
+GPIO_Status_t gpio_output_type_config(GPIO_TypeDef *GPIOx, uint8_t pin, GPIO_OType_t otype);
 
 /**
  * @brief Configures the output speed (very low, low, high, very high)
@@ -136,7 +146,7 @@ void gpio_output_type_config(GPIO_TypeDef *GPIOx, uint8_t pin, GPIO_OType_t otyp
  *
  * @return None
  */
-void gpio_speed_config(GPIO_TypeDef *GPIOx, uint8_t pin, GPIO_Speed_t speed);
+GPIO_Status_t gpio_speed_config(GPIO_TypeDef *GPIOx, uint8_t pin, GPIO_Speed_t speed);
 
 /**
  * @brief Configures internal pull (no pull, pull up, pull down), useful for input mode
@@ -151,7 +161,7 @@ void gpio_speed_config(GPIO_TypeDef *GPIOx, uint8_t pin, GPIO_Speed_t speed);
  *
  * @return None
  */
-void gpio_pull_config(GPIO_TypeDef *GPIOx, uint8_t pin, GPIO_Pull_t pull);
+GPIO_Status_t gpio_pull_config(GPIO_TypeDef *GPIOx, uint8_t pin, GPIO_Pull_t pull);
 
 /**
  * @brief Configures the alternate function for a pin
@@ -166,7 +176,7 @@ void gpio_pull_config(GPIO_TypeDef *GPIOx, uint8_t pin, GPIO_Pull_t pull);
  *
  * @note Be sure you have the correct AF configured
  */
-void gpio_alternate_function_config(GPIO_TypeDef *GPIOx, uint8_t pin, GPIO_AF_t alternate);
+GPIO_Status_t gpio_alternate_function_config(GPIO_TypeDef *GPIOx, uint8_t pin, GPIO_AF_t alternate);
 
 /**
  * @brief Initializes GPIO pin to given configuration
@@ -178,7 +188,7 @@ void gpio_alternate_function_config(GPIO_TypeDef *GPIOx, uint8_t pin, GPIO_AF_t 
  *
  * @return None
  */
-void gpio_init(GPIO_Config_t *cfg);
+GPIO_Status_t gpio_init(GPIO_Config_t *cfg);
 
 /**
  * @brief Drives a given pin from a given port (HIGH or LOW) via the BSRR register
@@ -192,7 +202,7 @@ void gpio_init(GPIO_Config_t *cfg);
  *
  * @return None
  */
-void gpio_write(GPIO_TypeDef *GPIOx, uint8_t pin, GPIO_State_t state);
+GPIO_Status_t gpio_write(GPIO_Pin_t *gpio, GPIO_State_t state);
 
 /**
  * @brief Switches pin output from HIGH to LOW or LOW to HIGH from a specific pin
@@ -205,7 +215,7 @@ void gpio_write(GPIO_TypeDef *GPIOx, uint8_t pin, GPIO_State_t state);
  *
  * @return None
  */
-void gpio_toggle(GPIO_TypeDef *GPIOx, uint8_t pin);
+GPIO_Status_t gpio_toggle(GPIO_Pin_t *gpio);
 
 /**
  * @brief Switches pin output from HIGH to LOW or LOW to HIGH from a specific pin (config)
@@ -217,7 +227,7 @@ void gpio_toggle(GPIO_TypeDef *GPIOx, uint8_t pin);
  *
  * @return None
  */
-void gpio_toggle_pin(GPIO_Config_t *GPIO);
+GPIO_Status_t gpio_toggle_pin(GPIO_Config_t *gpio);
 
 /**
  * @brief Reads input from a specific pin using the IDR register
@@ -229,6 +239,8 @@ void gpio_toggle_pin(GPIO_Config_t *GPIO);
  *
  * @note Reads actual pin state, which may differ from ODR due to external circuitry.
  */
-GPIO_State_t gpio_read(GPIO_TypeDef *GPIOx, uint8_t pin);
+GPIO_State_t gpio_read(GPIO_Pin_t *gpio);
+
+GPIO_State_t gpio_read_pin(GPIO_Config_t *cfg);
 
 #endif /* GPIO_H_ */

@@ -41,21 +41,36 @@ void led_toggle(LED_t *led)
 {
 	if (led->mode != LED_MODE_GPIO) return;
 
-	gpio_toggle(led->port, led->pin);
+	GPIO_Pin_t gpio = {
+		.port = led->port,
+		.pin = led->pin
+	};
+
+	gpio_toggle(&gpio);
 }
 
 void led_on(LED_t *led)
 {
 	if (led->mode != LED_MODE_GPIO) return;
 
-	gpio_write(led->port, led->pin, GPIO_HIGH);
+	GPIO_Pin_t gpio = {
+		.port = led->port,
+		.pin = led->pin
+	};
+
+	gpio_write(&gpio, GPIO_HIGH);
 }
 
 void led_off(LED_t *led)
 {
 	if (led->mode != LED_MODE_GPIO) return;
 
-	gpio_write(led->port, led->pin, GPIO_LOW);
+	GPIO_Pin_t gpio = {
+		.port = led->port,
+		.pin = led->pin
+	};
+
+	gpio_write(&gpio, GPIO_LOW);
 }
 
 void led_set_brightness(LED_t *led, uint32_t brightness)

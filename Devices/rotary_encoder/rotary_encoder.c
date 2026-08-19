@@ -49,7 +49,6 @@ ROTARY_ENCODER_Status_t rotary_encoder_init(ROTARY_ENCODER_t *cfg)
 	cfg->previous_velocity_count = 0U;
 	cfg->velocity_delta_count = 0U;
 
-	cfg->previous_raw_count = 0U;
 	cfg->previous_update_ms = 0U;
 
 	cfg->revolutions_per_second = 0U;

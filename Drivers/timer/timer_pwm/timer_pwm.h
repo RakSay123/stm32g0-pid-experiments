@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../timer.h"
+#include "timer/timer.h"
 
 typedef enum {
 	TIM_PWM1 = 0,
