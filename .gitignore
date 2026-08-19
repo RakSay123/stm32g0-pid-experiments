@@ -1,0 +1,18 @@
+# Build output
+Debug/
+Release/
+
+# CubeIDE generated launch files
+*.launch
+
+# Logs
+*.log
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Temporary files
+*.bak
+*.tmp
