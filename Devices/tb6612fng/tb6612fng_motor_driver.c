@@ -1,4 +1,5 @@
 #include "tb6612fng_motor_driver.h"
+#include <stddef.h>
 
 static MOTOR_DRIVER_Status_t tb6612fng_motor_driver_set_direction(void *context, uint8_t channel, MOTOR_DRIVER_Direction_t direction)
 {
@@ -36,8 +37,10 @@ static MOTOR_DRIVER_Status_t tb6612fng_motor_driver_coast(void *context, uint8_t
 	return (status == TB6612FNG_OK) ? MOTOR_DRIVER_OK : MOTOR_DRIVER_ERR;;
 }
 
-MOTOR_DRIVER_t tb6612fng_as_motor_driver(TB6612FNG_t *tb6612fng)
+MOTOR_DRIVER_Status_t tb6612fng_motor_driver_bind(MOTOR_DRIVER_t *motor_driver, TB6612FNG_t *tb6612fng)
 {
+	if (motor_driver == NULL || tb6612fng == NULL) return MOTOR_DRIVER_ERR;
+
 	static const MOTOR_DRIVER_Ops_t tb6612fng_motor_driver_ops = {
 		.set_direction = tb6612fng_motor_driver_set_direction,
 		.set_output = tb6612fng_motor_driver_set_output,
@@ -45,10 +48,8 @@ MOTOR_DRIVER_t tb6612fng_as_motor_driver(TB6612FNG_t *tb6612fng)
 		.coast = tb6612fng_motor_driver_coast
 	};
 
-	MOTOR_DRIVER_t motor_driver = {
-		.context = tb6612fng,
-		.ops = &tb6612fng_motor_driver_ops
-	};
+	motor_driver->context = tb6612fng;
+	motor_driver->ops = &tb6612fng_motor_driver_ops;
 
-	return motor_driver;
+	return MOTOR_DRIVER_OK;
 }
