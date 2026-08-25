@@ -10,7 +10,7 @@
 #include "led/led.h"
 #include "rotary_encoder/rotary_encoder.h"
 #include "tb6612fng/tb6612fng.h"
-#include "tb6612fng/tb6612fng_motor_driver.h"
+#include "motor_driver/motor_driver.h"
 #include "dc_motor/dc_motor.h"
 
 LED_t* board_get_status_led(void);

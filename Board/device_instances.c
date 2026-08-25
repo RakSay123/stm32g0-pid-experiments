@@ -6,6 +6,7 @@
  */
 
 #include "device_instances.h"
+#include "tb6612fng/tb6612fng_motor_driver.h"
 
 static LED_t status_led = {
 	.port = GPIOA,

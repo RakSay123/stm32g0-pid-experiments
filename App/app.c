@@ -225,8 +225,10 @@ static APP_Demo_State_t app_demo_switch_state(APP_Demo_State_t state)
 			return APP_DEMO_COMPLETE;
 
 		case APP_DEMO_COMPLETE:
+			return APP_DEMO_COMPLETE;
+
 		default:
-			return APP_DEMO_LOW_SPEED_CW;
+			return APP_DEMO_COMPLETE;
 	}
 
 	return state;
