@@ -1,13 +1,22 @@
 /*
  * Application behavior belongs here.
  *
- * This file should describe what the firmware does,
- * not how peripherals are configured.
+ * PWM vs RPM characterization experiment.
+ *
+ * Sweep:
+ *   0% -> 100% PWM in 1% increments
+ *   100% -> 0% PWM in 1% increments
+ *
+ * Each duty cycle is held for 5 seconds.
+ * RPM samples from the final 1 second are averaged and
+ * printed as a CSV row.
  */
 
 #include "app.h"
 
 #include <stddef.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 #include "app_config.h"
 #include "device_instances.h"
@@ -19,256 +28,274 @@
 #include "motor_driver/motor_driver.h"
 #include "dc_motor/dc_motor.h"
 
-typedef enum {
-	APP_DEMO_LOW_SPEED_CW,
-	APP_DEMO_FULL_SPEED_CW,
-	APP_DEMO_COAST,
-	APP_DEMO_LOW_SPEED_CCW,
-	APP_DEMO_FULL_SPEED_CCW,
-	APP_DEMO_BRAKE,
-	APP_DEMO_COMPLETE
-} APP_Demo_State_t;
+
+#define APP_PWM_ARR_VALUE              1000U
+#define APP_PWM_STEP                   10U        /* 1% of ARR = 10 */
+#define APP_PWM_MIN                    0U
+#define APP_PWM_MAX                    1000U
+
+#define APP_PWM_DWELL_TIME_MS          5000U
+#define APP_PWM_SAMPLE_START_MS        4000U      /* Average final 1 second */
+
+
+typedef enum
+{
+	APP_SWEEP_UP,
+	APP_SWEEP_DOWN,
+	APP_SWEEP_COMPLETE
+} APP_Sweep_State_t;
+
 
 static DC_MOTOR_t *dc_motor;
 static ROTARY_ENCODER_t *encoder;
 
-static APP_Demo_State_t demo_state;
+static APP_Sweep_State_t sweep_state;
+
+static uint32_t current_pwm;
+static uint32_t sweep_step_start_ms;
 
 static uint32_t previous_led_toggle_ms;
 static uint32_t previous_encoder_update_ms;
-static uint32_t previous_encoder_print_ms;
-static uint32_t previous_demo_state_ms;
+
+static float rpm_sum;
+static uint32_t rpm_sample_count;
 
 static bool rotary_encoder_update_success;
-static uint8_t stop_snapshots_printed;
 
-static void app_print_encoder_position(USART_TypeDef *USARTx, ROTARY_ENCODER_t *rotary_encoder)
+
+/*
+ * Print one CSV row:
+ *
+ * phase,duty_percent,pwm,rpm,samples
+ */
+static void app_print_csv_result(void)
 {
-	uart_write_str(USARTx, "[ROTARY_ENCODER] Direction: ");
-	if (rotary_encoder_get_direction(rotary_encoder) == TIM_ENCODER_DIRECTION_UP) uart_write_str(USARTx, "UP | ");
-	else uart_write_str(USARTx, "DOWN | ");
+	float duty_percent =
+			((float) current_pwm / (float) APP_PWM_ARR_VALUE) * 100.0f;
 
-	uart_write_str(USARTx, "Count: ");
-	uart_write_int(USARTx, rotary_encoder_get_total_count(rotary_encoder));
-	uart_write_str(USARTx, " | ");
+	float average_rpm = 0.0f;
 
-	uart_write_str(USARTx, "Revolutions: ");
-	uart_write_float(USARTx, rotary_encoder_get_revolutions(rotary_encoder));
-	uart_write_str(USARTx, " | ");
+	if (rpm_sample_count > 0U)
+	{
+		average_rpm = rpm_sum / (float) rpm_sample_count;
+	}
 
-	uart_write_str(USARTx, "Cumulative angle: ");
-	uart_write_float(USARTx, rotary_encoder_get_cumulative_angle_degrees(rotary_encoder));
-	uart_write_str(USARTx, " deg | ");
+	if (sweep_state == APP_SWEEP_UP)
+	{
+		uart_write_str(USART2, "UP,");
+	}
+	else if (sweep_state == APP_SWEEP_DOWN)
+	{
+		uart_write_str(USART2, "DOWN,");
+	}
+	else
+	{
+		uart_write_str(USART2, "COMPLETE,");
+	}
 
-	uart_write_str(USARTx, "Normalized angle: ");
-	uart_write_float(USARTx, rotary_encoder_get_normalized_angle_degrees(rotary_encoder));
-	uart_write_line(USARTx, " deg");
+	uart_write_float(USART2, duty_percent);
+	uart_write_str(USART2, ",");
+
+	uart_write_int(USART2, current_pwm);
+	uart_write_str(USART2, ",");
+
+	uart_write_float(USART2, average_rpm);
+	uart_write_str(USART2, ",");
+
+	uart_write_int(USART2, rpm_sample_count);
+	uart_write_line(USART2, "");
 }
 
-static void app_print_encoder_distance(USART_TypeDef *USARTx, ROTARY_ENCODER_t *rotary_encoder)
-{
-	uart_write_str(USARTx, "[ROTARY_ENCODER] Displacement: ");
-	uart_write_float(USARTx, rotary_encoder_get_displacement_mm(rotary_encoder));
-	uart_write_str(USARTx, " mm | ");
 
-	uart_write_str(USARTx, "Distance: ");
-	uart_write_float(USARTx, rotary_encoder_get_total_distance_mm(rotary_encoder));
-	uart_write_line(USARTx, " mm");
+static void app_reset_rpm_samples(void)
+{
+	rpm_sum = 0.0f;
+	rpm_sample_count = 0U;
 }
 
-static void app_print_encoder_velocity(USART_TypeDef *USARTx, ROTARY_ENCODER_t *rotary_encoder)
+
+static void app_apply_pwm(void)
 {
-	uart_write_str(USARTx, "[ROTARY_ENCODER] Rev/s: ");
-	uart_write_float(USARTx, rotary_encoder_get_revolutions_per_second(rotary_encoder));
-	uart_write_str(USARTx, " | ");
-
-	uart_write_str(USARTx, "RPM: ");
-	uart_write_float(USARTx, rotary_encoder_get_rpm(rotary_encoder));
-	uart_write_str(USARTx, " | ");
-
-	uart_write_str(USARTx, "Deg/s: ");
-	uart_write_float(USARTx, rotary_encoder_get_degrees_per_second(rotary_encoder));
-	uart_write_str(USARTx, " | ");
-
-	uart_write_str(USARTx, "Velocity: ");
-	uart_write_float(USARTx, rotary_encoder_get_linear_velocity_mm_per_second(rotary_encoder));
-	uart_write_str(USARTx, " mm/s | ");
-
-	uart_write_str(USARTx, "Top speed: ");
-	uart_write_float(USARTx, rotary_encoder_get_top_speed_mm_per_second(rotary_encoder));
-	uart_write_str(USARTx, " mm/s | ");
-
-	uart_write_str(USARTx, "Motion: ");
-	if (rotary_encoder->motion == ROTARY_ENCODER_UP) uart_write_line(USARTx, "UP");
-	else if (rotary_encoder->motion == ROTARY_ENCODER_DOWN) uart_write_line(USARTx, "DOWN");
-	else if (rotary_encoder->motion == ROTARY_ENCODER_STOPPED) uart_write_line(USARTx, "STOPPED");
-	else uart_write_line(USARTx, "UNKNOWN");
+	dc_motor_set_speed_and_direction(
+			dc_motor,
+			MOTOR_DRIVER_FORWARD,
+			current_pwm
+	);
 }
 
-static void app_print_encoder_all(USART_TypeDef *USARTx, ROTARY_ENCODER_t *rotary_encoder)
-{
-	app_print_encoder_position(USARTx, rotary_encoder);
-	app_print_encoder_distance(USARTx, rotary_encoder);
-	app_print_encoder_velocity(USARTx, rotary_encoder);
-	uart_write_line(USARTx, "");
-}
 
 static void app_update_status_led(uint32_t current_ms)
 {
-	if (current_ms - previous_led_toggle_ms < APP_STATUS_LED_PERIOD_MS) return;
+	if (current_ms - previous_led_toggle_ms < APP_STATUS_LED_PERIOD_MS)
+	{
+		return;
+	}
 
 	previous_led_toggle_ms = current_ms;
+
 	led_toggle(board_get_status_led());
 }
 
+
+/*
+ * Keep the encoder velocity estimate updating normally.
+ *
+ * During the final second of each PWM step, accumulate RPM
+ * samples for averaging.
+ */
 static void app_update_encoder(uint32_t current_ms)
 {
 	rotary_encoder_update_distance(encoder);
 
-	if (current_ms - previous_encoder_update_ms < APP_ENCODER_UPDATE_PERIOD_MS) return;
-
-	previous_encoder_update_ms = current_ms;
-	rotary_encoder_update_success = rotary_encoder_update_velocity(encoder, current_ms) == ROTARY_ENCODER_OK;
-}
-
-static void app_print_encoder(uint32_t current_ms)
-{
-	if (current_ms - previous_encoder_print_ms < APP_ENCODER_PRINT_PERIOD_MS) return;
-
-	previous_encoder_print_ms = current_ms;
-
-	if (!rotary_encoder_update_success)
+	if (current_ms - previous_encoder_update_ms < APP_ENCODER_UPDATE_PERIOD_MS)
 	{
-		uart_write_line(USART2, "[ROTARY_ENCODER] Update failed");
 		return;
 	}
 
-	ROTARY_ENCODER_Motion_t motion = rotary_encoder_get_motion(encoder);
+	previous_encoder_update_ms = current_ms;
 
-	if (motion == ROTARY_ENCODER_STOPPED)
+	rotary_encoder_update_success =
+			rotary_encoder_update_velocity(encoder, current_ms)
+			== ROTARY_ENCODER_OK;
+
+	if (!rotary_encoder_update_success)
 	{
-		if (stop_snapshots_printed >= APP_STOPPED_SNAPSHOT_LIMIT) return;
-		stop_snapshots_printed++;
-	}
-	else
-	{
-		stop_snapshots_printed = 0U;
+		return;
 	}
 
-	app_print_encoder_all(USART2, encoder);
+	uint32_t elapsed_ms = current_ms - sweep_step_start_ms;
+
+	if (elapsed_ms >= APP_PWM_SAMPLE_START_MS)
+	{
+		rpm_sum += rotary_encoder_get_rpm(encoder);
+		rpm_sample_count++;
+	}
 }
 
-static void app_demo_enter_state(APP_Demo_State_t state)
+
+static void app_advance_sweep(uint32_t current_ms)
 {
-	switch (state)
+	/*
+	 * First report the PWM level that just completed its
+	 * 5-second measurement window.
+	 */
+	app_print_csv_result();
+
+	/*
+	 * Then determine the next PWM command.
+	 */
+	switch (sweep_state)
 	{
-		case APP_DEMO_LOW_SPEED_CW:
-			uart_write_line(USART2, "\r\n=== LOW SPEED CW ===");
-			dc_motor_set_speed_and_direction(dc_motor, MOTOR_DRIVER_FORWARD, APP_MOTOR_LOW_SPEED);
+		case APP_SWEEP_UP:
+
+			if (current_pwm >= APP_PWM_MAX)
+			{
+				sweep_state = APP_SWEEP_DOWN;
+
+				/*
+				 * 100% was already measured on the way up,
+				 * so begin downward sweep at 99%.
+				 */
+				current_pwm = APP_PWM_MAX - APP_PWM_STEP;
+			}
+			else
+			{
+				current_pwm += APP_PWM_STEP;
+			}
+
 			break;
 
-		case APP_DEMO_FULL_SPEED_CW:
-			uart_write_line(USART2, "\r\n=== FULL LOW SPEED CW ===");
-			dc_motor_set_speed_and_direction(dc_motor, MOTOR_DRIVER_FORWARD, APP_MOTOR_FULL_SPEED);
+
+		case APP_SWEEP_DOWN:
+
+			if (current_pwm <= APP_PWM_MIN)
+			{
+				sweep_state = APP_SWEEP_COMPLETE;
+
+				dc_motor_coast(dc_motor);
+
+				uart_write_line(USART2, "=== EXPERIMENT COMPLETE ===");
+
+				return;
+			}
+
+			current_pwm -= APP_PWM_STEP;
+
 			break;
 
-		case APP_DEMO_COAST:
-			uart_write_line(USART2, "\r\n=== COAST ===");
-			dc_motor_coast(dc_motor);
-			break;
 
-		case APP_DEMO_LOW_SPEED_CCW:
-			uart_write_line(USART2, "\r\n=== LOW SPEED CCW ===");
-			dc_motor_set_speed_and_direction(dc_motor, MOTOR_DRIVER_REVERSE, APP_MOTOR_LOW_SPEED);
-			break;
-
-		case APP_DEMO_FULL_SPEED_CCW:
-			uart_write_line(USART2, "\r\n=== FULL SPEED CCW ===");
-			dc_motor_set_speed_and_direction(dc_motor, MOTOR_DRIVER_REVERSE, APP_MOTOR_FULL_SPEED);
-			break;
-
-		case APP_DEMO_BRAKE:
-			uart_write_line(USART2, "\r\n=== BRAKE ===");
-			dc_motor_brake(dc_motor);
-			break;
-
-		case APP_DEMO_COMPLETE:
-			uart_write_line(USART2, "\r\n=== COMPLETE ===");
-			dc_motor_coast(dc_motor);
-			break;
-
+		case APP_SWEEP_COMPLETE:
 		default:
-			break;
+			return;
 	}
+
+
+	app_reset_rpm_samples();
+
+	sweep_step_start_ms = current_ms;
+
+	app_apply_pwm();
 }
 
-static APP_Demo_State_t app_demo_switch_state(APP_Demo_State_t state)
+
+static void app_update_sweep(uint32_t current_ms)
 {
-	switch (state)
+	if (sweep_state == APP_SWEEP_COMPLETE)
 	{
-		case APP_DEMO_LOW_SPEED_CW:
-			return APP_DEMO_FULL_SPEED_CW;
-
-		case APP_DEMO_FULL_SPEED_CW:
-			return APP_DEMO_COAST;
-
-		case APP_DEMO_COAST:
-			return APP_DEMO_LOW_SPEED_CCW;
-
-		case APP_DEMO_LOW_SPEED_CCW:
-			return APP_DEMO_FULL_SPEED_CCW;
-
-		case APP_DEMO_FULL_SPEED_CCW:
-			return APP_DEMO_BRAKE;
-
-		case APP_DEMO_BRAKE:
-			return APP_DEMO_COMPLETE;
-
-		case APP_DEMO_COMPLETE:
-			return APP_DEMO_COMPLETE;
-
-		default:
-			return APP_DEMO_COMPLETE;
+		return;
 	}
 
-	return state;
+	if (current_ms - sweep_step_start_ms < APP_PWM_DWELL_TIME_MS)
+	{
+		return;
+	}
+
+	app_advance_sweep(current_ms);
 }
 
-static void app_update_demo(uint32_t current_ms)
-{
-	if (demo_state == APP_DEMO_COMPLETE) return;
-	if (current_ms - previous_demo_state_ms < APP_DEMO_STATE_DURATION_MS) return;
-
-	previous_demo_state_ms = current_ms;
-
-	demo_state = app_demo_switch_state(demo_state);
-	app_demo_enter_state(demo_state);
-}
 
 void app_init(void)
 {
 	dc_motor = board_get_motor();
-	if (dc_motor == NULL) return;
+
+	if (dc_motor == NULL)
+	{
+		return;
+	}
 
 	encoder = board_get_motor_encoder();
-	if (encoder == NULL) return;
 
-	rotary_encoder_update_success = rotary_encoder_set_count_zero(encoder) == ROTARY_ENCODER_OK;
-	demo_state = APP_DEMO_LOW_SPEED_CW;
+	if (encoder == NULL)
+	{
+		return;
+	}
+
+
+	rotary_encoder_update_success =
+			rotary_encoder_set_count_zero(encoder)
+			== ROTARY_ENCODER_OK;
+
 
 	uint32_t current_ms = millis();
 
 	previous_led_toggle_ms = current_ms;
 	previous_encoder_update_ms = current_ms;
-	previous_encoder_print_ms = current_ms;
-	previous_demo_state_ms = current_ms;
+
+	sweep_step_start_ms = current_ms;
+
+	current_pwm = APP_PWM_MIN;
+
+	sweep_state = APP_SWEEP_UP;
+
+	app_reset_rpm_samples();
 
 
-	stop_snapshots_printed = 0U;
+	uart_write_line(USART2, "=== PWM VS RPM NO-LOAD EXPERIMENT ===");
+	uart_write_line(USART2, "phase,duty_percent,pwm,rpm,samples");
 
-	uart_write_line(USART2, "SUCCESSFUL BOOT");
-	app_demo_enter_state(demo_state);
+	app_apply_pwm();
 }
+
 
 void app_update(void)
 {
@@ -276,6 +303,5 @@ void app_update(void)
 
 	app_update_status_led(current_ms);
 	app_update_encoder(current_ms);
-	app_print_encoder(current_ms);
-	app_update_demo(current_ms);
+	app_update_sweep(current_ms);
 }
