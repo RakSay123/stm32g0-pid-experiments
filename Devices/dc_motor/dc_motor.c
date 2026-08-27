@@ -4,8 +4,6 @@ DC_MOTOR_Status_t dc_motor_init(DC_MOTOR_t *motor)
 {
 	if (motor == NULL || motor->motor_driver == NULL || motor->motor_driver->ops == NULL) return DC_MOTOR_ERR;
 
-//	if (tb6612fng_init(motor->motor_driver) != TB6612FNG_OK) return DC_MOTOR_ERR;
-
 	return DC_MOTOR_OK;
 }
 
