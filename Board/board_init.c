@@ -25,6 +25,7 @@
 #include "tb6612fng/tb6612fng.h"
 #include "tb6612fng/tb6612fng_motor_driver.h"
 #include "dc_motor/dc_motor.h"
+#include "motor_controller/motor_controller.h"
 
 static GPIO_Config_t usart2_tx = {
 	.port = GPIOA,
@@ -69,7 +70,7 @@ static TIM_Config_t tim16_cfg = {
 };
 
 static TIM_Config_t tim17_cfg = {
-	.TIMx = TIM16,
+	.TIMx = TIM17,
 	.psc = BOARD_TIM17_PSC,
 	.arr = BOARD_TIM17_ARR,
 	.cnt = BOARD_TIM17_CNT,
@@ -83,6 +84,7 @@ BOARD_Status_t board_init(void)
 	TB6612FNG_t *tb6612fng = board_get_tb6612fng();
 	MOTOR_DRIVER_t *motor_driver = board_get_motor_driver();
 	DC_MOTOR_t *motor = board_get_motor();
+	MOTOR_CONTROLLER_t *motor_controller = board_get_motor_controller();
 
 	if (status_led == NULL) return BOARD_STATUS_LED_ERROR;
 	if (tb6612fng == NULL) return BOARD_STATUS_TB6612FNG_ERROR;
@@ -97,13 +99,13 @@ BOARD_Status_t board_init(void)
 	if (timer_init(&tim3_cfg) != TIM_OK) return BOARD_STATUS_TIM3_ERROR;
 	if (timer_init(&tim16_cfg) != TIM_OK) return BOARD_STATUS_TIM16_ERROR;
 	if (timer_init(&tim17_cfg) != TIM_OK) return BOARD_STATUS_TIM17_ERROR;
-	systick_init(BOARD_FCLK_HZ / BOARD_SYSTICK_HZ);
 
 	led_init(status_led); // void return type at the moment
-	if (rotary_encoder_init(motor_encoder) != ROTARY_ENCODER_OK) return BOARD_STATUS_ENCODER_ERROR;
+	if (rotary_encoder_init(motor_encoder) != ROTARY_ENCODER_OK) return BOARD_STATUS_ENCODER_ERROR;  // should be commented out when motor_controller_init properly initializes this
 	if (tb6612fng_init(tb6612fng) != TB6612FNG_OK) return BOARD_STATUS_TB6612FNG_ERROR;
 	if (tb6612fng_motor_driver_bind(motor_driver, tb6612fng) != MOTOR_DRIVER_OK) return BOARD_STATUS_MOTOR_DRIVER_ERROR;
-	if (dc_motor_init(motor) != DC_MOTOR_OK) return BOARD_STATUS_DC_MOTOR_ERROR;
+	if (dc_motor_init(motor) != DC_MOTOR_OK) return BOARD_STATUS_DC_MOTOR_ERROR;                     // should be commented out when motor_controller_init properly initializes this
+	if (motor_controller_init(motor_controller, KP, KI, KD, 0.0f, (float)tb6612fng->channel_a->pwm->TIMx->ARR) != MOTOR_CONTROLLER_OK) return BOARD_STATUS_MOTOR_CONTROLLER_ERROR;
 
 	return BOARD_STATUS_OK;
 }

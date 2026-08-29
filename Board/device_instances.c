@@ -153,6 +153,11 @@ static DC_MOTOR_t motor = {
 	.driver_channel = 0U
 };
 
+static MOTOR_CONTROLLER_t motor_controller = {
+	.encoder = &rotary_encoder_cfg,
+	.motor = &motor,
+};
+
 LED_t* board_get_status_led(void)
 {
 	return &status_led;
@@ -176,4 +181,9 @@ MOTOR_DRIVER_t* board_get_motor_driver(void)
 DC_MOTOR_t* board_get_motor(void)
 {
 	return &motor;
+}
+
+MOTOR_CONTROLLER_t* board_get_motor_controller(void)
+{
+	return &motor_controller;
 }

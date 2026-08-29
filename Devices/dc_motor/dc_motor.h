@@ -1,7 +1,6 @@
 #pragma once
 
 #include <stddef.h>
-//#include "tb6612fng/tb6612fng.h"
 #include "motor_driver/motor_driver.h"
 
 typedef enum {
