@@ -27,7 +27,9 @@ MOTOR_CONTROLLER_Status_t motor_controller_init(MOTOR_CONTROLLER_t *controller, 
 
 MOTOR_CONTROLLER_Status_t motor_controller_set_rpm(MOTOR_CONTROLLER_t *controller, float target_rpm);
 
-MOTOR_CONTROLLER_Status_t motor_controller_update(MOTOR_CONTROLLER_t *controller, uint32_t current_ms);
+MOTOR_CONTROLLER_Status_t motor_controller_set_rev_per_sec(MOTOR_CONTROLLER_t *controller, float target_rev_per_sec);
+
+MOTOR_CONTROLLER_Status_t motor_controller_update(MOTOR_CONTROLLER_t *controller, uint32_t current_ms, float dt_seconds);
 
 MOTOR_CONTROLLER_Status_t motor_controller_disable(MOTOR_CONTROLLER_t *controller);
 

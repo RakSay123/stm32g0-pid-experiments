@@ -23,7 +23,12 @@ MOTOR_CONTROLLER_Status_t motor_controller_set_rpm(MOTOR_CONTROLLER_t *controlle
 	return MOTOR_CONTROLLER_OK;
 }
 
-MOTOR_CONTROLLER_Status_t motor_controller_update(MOTOR_CONTROLLER_t *controller, uint32_t current_ms)
+MOTOR_CONTROLLER_Status_t motor_controller_set_rev_per_sec(MOTOR_CONTROLLER_t *controller, float target_rev_per_sec)
+{
+	return motor_controller_set_rpm(controller, target_rev_per_sec * 60);
+}
+
+MOTOR_CONTROLLER_Status_t motor_controller_update(MOTOR_CONTROLLER_t *controller, uint32_t current_ms, float dt_seconds)
 {
 	if (controller == NULL) return MOTOR_CONTROLLER_ERR;
 	if (!controller->enabled) return MOTOR_CONTROLLER_OK;
@@ -33,7 +38,7 @@ MOTOR_CONTROLLER_Status_t motor_controller_update(MOTOR_CONTROLLER_t *controller
 
 	float measured_rpm = rotary_encoder_get_rpm(controller->encoder);
 	float control_output;
-	if (pid_update(&controller->pid, &control_output, controller->target_rpm, measured_rpm) != PID_OK) return MOTOR_CONTROLLER_ERR;
+	if (pid_update(&controller->pid, &control_output, controller->target_rpm, measured_rpm, dt_seconds) != PID_OK) return MOTOR_CONTROLLER_ERR;
 
 	dc_motor_set_speed_and_direction(controller->motor, MOTOR_DRIVER_FORWARD, control_output);
 
@@ -41,14 +46,15 @@ MOTOR_CONTROLLER_Status_t motor_controller_update(MOTOR_CONTROLLER_t *controller
 	controller->error = controller->target_rpm - measured_rpm;
 	controller->control_output = control_output;
 
-	uart_write_str(USART2, "[DEBUG] target rpm: ");
-	uart_write_float(USART2, (float)controller->target_rpm);
-	uart_write_str(USART2, " | measured rpm: ");
-	uart_write_float(USART2, (float)controller->measured_rpm);
-	uart_write_str(USART2, " | error: ");
-	uart_write_float(USART2, (float)controller->error);
-	uart_write_str(USART2, " | control output: ");
-	uart_write_float(USART2, (float)controller->control_output);
+	uart_write_int(USART2, current_ms);
+	uart_write_str(USART2, ",");
+	uart_write_float(USART2, controller->target_rpm);
+	uart_write_str(USART2, ",");
+	uart_write_float(USART2, controller->measured_rpm);
+	uart_write_str(USART2, ",");
+	uart_write_float(USART2, controller->error);
+	uart_write_str(USART2, ",");
+	uart_write_float(USART2, controller->control_output);
 	uart_write_line(USART2, "");
 
 

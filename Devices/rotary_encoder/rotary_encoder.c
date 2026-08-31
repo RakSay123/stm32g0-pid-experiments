@@ -77,7 +77,7 @@ ROTARY_ENCODER_Status_t rotary_encoder_update_distance(ROTARY_ENCODER_t *encoder
 	encoder->previous_raw_count = encoder->raw_count;
 	encoder->raw_count = (uint16_t)hardware_count;
 
-	encoder->delta_count = (int16_t)encoder->raw_count - encoder->previous_raw_count;
+	encoder->delta_count = (int16_t)(encoder->raw_count - encoder->previous_raw_count);
 	encoder->total_count += encoder->delta_count;
 
 	encoder->revolutions = (float)encoder->total_count / (float)encoder->counts_per_revolution;
