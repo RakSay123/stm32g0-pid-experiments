@@ -25,6 +25,6 @@
 #define BOARD_TIM17_ARR               (1000U - 1U)
 #define BOARD_TIM17_CNT               0U
 
-#define KP 							  6.0f
+#define KP 							  7.0f
 #define KI 							  0.0f
 #define KD 						  	  0.0f
