@@ -1,7 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-data = pd.read_csv("../logs/p_control/kp_16.csv")
+data = pd.read_csv("../logs/pi_control/kp_7_ki_8.0.csv")
 
 time_seconds = data["time_ms"] / 1000.0
 
@@ -10,7 +10,7 @@ plt.plot(time_seconds, data["measured_rpm"], label="Measured RPM")
 
 plt.xlabel("Time (s)")
 plt.ylabel("RPM")
-plt.title("P Controller Step Response (Kp=16)")
+plt.title("PI Controller Step Response (Kp=7, Ki=8.0)")
 
 plt.grid()
 plt.legend()

@@ -26,5 +26,5 @@
 #define BOARD_TIM17_CNT               0U
 
 #define KP 							  7.0f
-#define KI 							  0.0f
+#define KI 							  8.0f
 #define KD 						  	  0.0f
